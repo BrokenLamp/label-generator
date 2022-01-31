@@ -1,56 +1,103 @@
+use std::collections::HashMap;
+
+use anyhow::{anyhow, Context, Result};
 use manifest::Manifest;
+use regex::Regex;
 
 mod manifest;
 
-fn main() {
-    let args = std::env::args().collect::<Vec<_>>();
-    if args.len() < 2 {
-        println!("Usage: {} <file>", args[0]);
-        std::process::exit(1);
-    }
-    let manifest_string = std::fs::read_to_string(format!("{}/manifest.toml", &args[1])).unwrap();
-    let manifest: Manifest = toml::from_str(&manifest_string).unwrap();
-    let root = std::fs::read_to_string(format!("{}/{}", &args[1], &manifest.root)).unwrap();
-    let mut file_data = Vec::new();
-    for folder in manifest.folders {
-        let mut inner_file_data = Vec::new();
-        let path = format!("{}/{}", &args[1], folder);
-        let x = std::fs::read_dir(path).unwrap();
-        for i in x.flatten() {
-            let data = std::fs::read_to_string(i.path()).unwrap();
-            inner_file_data.push((
-                i.path()
-                    .file_name()
-                    .unwrap()
-                    .to_str()
-                    .unwrap()
-                    .split("-")
-                    .collect::<Vec<_>>()[0]
-                    .to_owned(),
-                data,
-            ));
-        }
-        file_data.push(inner_file_data);
-    }
-    fn get(a: &[Vec<(String, String)>]) -> Vec<(String, String)> {
-        if a.len() == 1 {
-            return a[0].clone();
-        }
-        let next = get(&a[1..]);
-        let mut result = Vec::new();
-        for i in a[0].iter() {
-            for j in next.iter() {
-                result.push((format!("{}-{}", i.0, j.0), format!("{}{}", i.1, j.1)));
+fn main() -> Result<()> {
+    println!(include_str!("../LICENSE"));
+    println!("SVG Label Generator\n");
+
+    let working_dir = get_working_dir()?;
+    let manifest: Manifest = get_manifest(&working_dir)?;
+
+    let root_file_data = std::fs::read_to_string(format!("{}/{}", &working_dir, &manifest.root))?;
+
+    let mut source_files: HashMap<String, String> = HashMap::new();
+
+    let mut output_files: Vec<(String, String)> =
+        vec![(manifest.sku.clone(), root_file_data.clone())];
+
+    let re = Regex::new(r"<!-- component:(.*) -->").unwrap();
+    for cap in re.captures_iter(&root_file_data) {
+        let component_name = &cap[1];
+
+        println!("{}", component_name);
+
+        let path_name = format!("{}/{}", &working_dir, component_name);
+        let path = std::path::Path::new(&path_name);
+
+        if path.is_dir() {
+            let files = std::fs::read_dir(path).unwrap();
+            let mut new_output_files = Vec::new();
+            for file in files.flatten() {
+                let mut files_to_append = Vec::new();
+                let path = file.path();
+                let path_str = path.to_str().unwrap().to_string();
+                let file_name = file.file_name().to_str().unwrap().to_string();
+                let file_data = match source_files.get(&path_str) {
+                    Some(data) => data,
+                    None => {
+                        let file_data = std::fs::read_to_string(path)?;
+                        source_files.insert(path_str.clone(), file_data);
+                        source_files.get(&path_str).unwrap()
+                    }
+                };
+                for (sku, data) in &output_files {
+                    let sku_name = file_name.split(".").collect::<Vec<_>>()[0]
+                        .split("-")
+                        .collect::<Vec<_>>()[0];
+                    let new_sku = sku.replace(&format!("{{{}}}", &component_name), &sku_name);
+                    let new_data = data.replace(
+                        &format!("<!-- component:{} -->", &component_name),
+                        &file_data,
+                    );
+                    files_to_append.push((new_sku, new_data));
+                }
+                new_output_files.append(&mut files_to_append);
+            }
+            output_files = new_output_files;
+        } else {
+            let path_name = format!("{}/{}.svg", &working_dir, component_name);
+            let path = std::path::Path::new(&path_name);
+            let file_data = match source_files.get(path.to_str().unwrap()) {
+                Some(data) => data,
+                None => {
+                    let file_data = std::fs::read_to_string(path)?;
+                    source_files.insert(path.to_str().unwrap().to_string(), file_data);
+                    source_files.get(path.to_str().unwrap()).unwrap()
+                }
+            };
+            for data in output_files.iter_mut() {
+                data.1 = data
+                    .1
+                    .replace(&format!("<!-- component:{} -->", component_name), file_data);
             }
         }
-        result
     }
-    let x = get(&file_data);
-    let _ = std::fs::create_dir(format!("{}/out", &args[1]));
-    for (sku, svg) in x.iter() {
-        let final_svg = root.replace("<!--body-->", svg);
-        let final_name = format!("{}-{}.svg", &manifest.prefix, sku);
-        let final_path = format!("{}/out/{}", &args[1], final_name);
-        std::fs::write(final_path, final_svg).unwrap();
+
+    let _ = std::fs::create_dir(format!("{}/out", &working_dir));
+    for (sku, svg) in output_files.into_iter() {
+        let final_path = format!("{}/out/{}.svg", &working_dir, sku);
+        println!("{}", sku);
+        std::fs::write(final_path, svg)?;
     }
+
+    Ok(())
+}
+
+fn get_working_dir() -> Result<String> {
+    let mut args = std::env::args().collect::<Vec<_>>();
+    if args.len() < 2 {
+        Err(anyhow!("No file specified"))?;
+    }
+    Ok(args.swap_remove(1))
+}
+
+fn get_manifest(folder_path: &str) -> Result<Manifest> {
+    let manifest_string = std::fs::read_to_string(format!("{}/manifest.toml", folder_path))
+        .context("Failed to load manifest.toml, is there one in the folder?")?;
+    Ok(toml::from_str(&manifest_string).context("Failed to parse manifest.toml")?)
 }
