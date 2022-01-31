@@ -1,5 +1,4 @@
 use manifest::Manifest;
-use std::path;
 
 mod manifest;
 
