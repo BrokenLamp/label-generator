@@ -12,6 +12,9 @@ fn main() -> Result<()> {
 
     let working_dir = get_working_dir()?;
     let manifest: Manifest = get_manifest(&working_dir)?;
+    println!("🔧 Config:");
+    println!("  >> Root: {}", manifest.root);
+    println!("  >> SKU: {}", manifest.sku);
 
     let root_file_data = std::fs::read_to_string(format!("{}/{}", &working_dir, &manifest.root))?;
 
@@ -20,16 +23,34 @@ fn main() -> Result<()> {
     let mut output_files: Vec<(String, String)> =
         vec![(manifest.sku.clone(), root_file_data.clone())];
 
+    println!("📦 Components:");
+
     let re = Regex::new(r"<!-- component:(.*) -->").unwrap();
     for cap in re.captures_iter(&root_file_data) {
         let component_name = &cap[1];
-
-        println!("{}", component_name);
 
         let path_name = format!("{}/{}", &working_dir, component_name);
         let path = std::path::Path::new(&path_name);
 
         if path.is_dir() {
+            println!("  >> {} 📂", component_name);
+            if !manifest.sku.contains(component_name) {
+                println!(
+                    "\x1b[93m     {} warning: '{}' not in sku\x1b[0m",
+                    "^".repeat(component_name.len()),
+                    component_name
+                );
+                println!(
+                    "\n\x1b[94m     Help: add '{{{}}}' to sku in manifest.toml\x1b[0m",
+                    component_name
+                );
+                println!("\x1b[94m     Example:\x1b[0m");
+                println!(
+                    "\x1b[94;1m     sku = \"{}-{{{}}}\"\x1b[0m",
+                    manifest.sku, component_name
+                );
+                println!();
+            }
             let files = std::fs::read_dir(path).unwrap();
             let mut new_output_files = Vec::new();
             for file in files.flatten() {
@@ -60,6 +81,7 @@ fn main() -> Result<()> {
             }
             output_files = new_output_files;
         } else {
+            println!("  >> {} 📝", component_name);
             let path_name = format!("{}/{}.svg", &working_dir, component_name);
             let path = std::path::Path::new(&path_name);
             let file_data = match source_files.get(path.to_str().unwrap()) {
@@ -78,12 +100,15 @@ fn main() -> Result<()> {
         }
     }
 
+    println!("💾 Generated Files:");
     let _ = std::fs::create_dir(format!("{}/out", &working_dir));
     for (sku, svg) in output_files.into_iter() {
         let final_path = format!("{}/out/{}.svg", &working_dir, sku);
-        println!("{}", sku);
+        println!("  >> {}", sku);
         std::fs::write(final_path, svg)?;
     }
+
+    println!("✅ Done\n");
 
     Ok(())
 }
