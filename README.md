@@ -100,3 +100,27 @@ This will create an `out` directory with our new label files
     ├── SC-F-3
     └── SC-F-4
 ```
+
+If we look at the `SC-P-2` file, we should see that our components are injected into the SVG.
+
+Eg:
+
+```svg
+<?xml version="1.0" encoding="utf-8"?>
+<svg version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+	 width="2048px" height="2048px" viewBox="0 0 2048 2048" style="enable-background:new 0 0 2048 2048;" xml:space="preserve">
+
+<g>
+    <text>Screw Company</text>
+</g>
+
+<g>
+    <text>Phillips</text>
+</g>
+
+<g>
+    <text>2"</text>
+</g>
+
+</svg>
+```
