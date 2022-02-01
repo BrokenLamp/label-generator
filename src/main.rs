@@ -9,6 +9,7 @@ mod manifest;
 fn main() -> Result<()> {
     println!(include_str!("../LICENSE"));
     println!("SVG Label Generator\n");
+    println!("https://github.com/BrokenLamp/label-generator\n");
 
     let working_dir = get_working_dir()?;
     let manifest: Manifest = get_manifest(&working_dir)?;
