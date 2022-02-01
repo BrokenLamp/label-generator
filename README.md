@@ -53,7 +53,7 @@ mkdir length
 Add files to these folders to be injected into `root.svg`.
 
 ```
-└── head
+├── head
 │   ├── P-phillips.svg
 │   └── F-flat_head.svg
 ├── length
