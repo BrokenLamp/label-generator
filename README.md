@@ -54,12 +54,12 @@ Add files to these folders to be injected into `root.svg`.
 
 ```
 └── head
-    ├── P-phillips.svg
-    └── F-flat_head.svg
-└── length
-    ├── 2-inch.svg
-    ├── 3-inch.svg
-    └── 4-inch.svg
+│   ├── P-phillips.svg
+│   └── F-flat_head.svg
+├── length
+│   ├── 2-inch.svg
+│   ├── 3-inch.svg
+│   └── 4-inch.svg
 ├── branding.svg
 ├── manifest.toml
 └── root.svg
