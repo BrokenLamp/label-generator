@@ -53,10 +53,11 @@ mkdir length
 Add files to these folders to be injected into `root.svg`.
 
 ```
-├── head
+.
+├── head/
 │   ├── P-phillips.svg
 │   └── F-flat_head.svg
-├── length
+├── length/
 │   ├── 2-inch.svg
 │   ├── 3-inch.svg
 │   └── 4-inch.svg
@@ -92,7 +93,8 @@ SVG Label Generator
 This will create an `out` directory with our new label files
 
 ```
-└── out
+.
+└── out/
     ├── SC-P-2
     ├── SC-P-3
     ├── SC-P-4
