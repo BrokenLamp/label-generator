@@ -1,8 +1,9 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, str::FromStr};
 
 use anyhow::{anyhow, Context, Result};
 use manifest::Manifest;
 use regex::Regex;
+use usvg::TextRendering;
 
 mod manifest;
 
@@ -101,12 +102,34 @@ fn main() -> Result<()> {
         }
     }
 
+    let path = std::path::PathBuf::from_str(&working_dir).unwrap();
+
+    let mut fontdb = usvg::fontdb::Database::new();
+    fontdb.load_system_fonts();
+    fontdb.load_fonts_dir(path);
+    let usvg_opt = usvg::Options {
+        text_rendering: TextRendering::GeometricPrecision,
+        font_family: "Ahem".to_string(),
+        keep_named_groups: true,
+        fontdb,
+        ..Default::default()
+    };
+    let xml_opt = usvg::XmlOptions {
+        id_prefix: None,
+        writer_opts: xmlwriter::Options {
+            use_single_quote: false,
+            indent: xmlwriter::Indent::Spaces(4),
+            attributes_indent: xmlwriter::Indent::Spaces(4),
+        },
+    };
+
     println!("💾 Generated Files:");
     let _ = std::fs::create_dir(format!("{}/out", &working_dir));
     for (sku, svg) in output_files.into_iter() {
         let final_path = format!("{}/out/{}.svg", &working_dir, sku);
         println!("  >> {}", sku);
-        std::fs::write(final_path, svg)?;
+        let tree = usvg::Tree::from_str(&svg, &usvg_opt.to_ref()).unwrap();
+        std::fs::write(final_path, &tree.to_string(&xml_opt))?;
     }
 
     println!("✅ Done\n");
