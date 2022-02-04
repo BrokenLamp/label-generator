@@ -35,23 +35,26 @@ impl<'a> OutputVariant<'a> {
         ignore_groups.iter().any(|group| group.matches(&v[..]))
     }
 
-    pub fn apply_to_svg(self, sku: &str, svg: &str) -> (String, String) {
+    pub fn get_sku(&self, template: &str) -> String {
+        let mut sku = template.to_string();
+        for (component_name, variant) in &self.component_variants {
+            sku = sku.replace(&format!("{{{}}}", component_name), variant.name.as_ref());
+        }
+        sku
+    }
+
+    pub fn apply_to_svg(self, svg: &str) -> String {
         let mut svg = svg.to_string();
-        let mut sku = sku.to_string();
 
         for (component_name, component_variant) in self.component_variants {
             let component_name = component_name.to_string();
 
-            sku = sku.replace(
-                format!("{{{}}}", component_name).as_str(),
-                component_variant.name.as_str(),
-            );
             svg = svg.replace(
                 &format!("<!-- component:{} -->", component_name),
                 &component_variant.data,
             );
         }
 
-        (sku, svg)
+        svg
     }
 }

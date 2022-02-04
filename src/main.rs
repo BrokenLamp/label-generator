@@ -2,6 +2,7 @@ use std::{collections::HashMap, str::FromStr};
 
 use anyhow::{anyhow, Context, Result};
 use manifest::Manifest;
+use rayon::prelude::*;
 use regex::Regex;
 use usvg::TextRendering;
 
@@ -28,7 +29,7 @@ fn main() -> Result<()> {
 
     let ignore_groups: Vec<IgnoreGroup> = manifest
         .ignore
-        .iter()
+        .par_iter()
         .flat_map(|s| IgnoreGroup::from_str(s))
         .collect::<Vec<_>>();
     println!("{:#?}", ignore_groups);
@@ -105,22 +106,31 @@ fn main() -> Result<()> {
     println!("📝 Generated Files:");
 
     let output_files = output_variants
-        .into_iter()
-        .filter(|x| !x.should_ignore(&ignore_groups))
-        .map(|x| x.apply_to_svg(&manifest.sku, &root_file_data))
+        .into_par_iter()
+        .map(|x| (x.get_sku(&manifest.sku), x))
+        .filter(|(sku, x)| {
+            let should_ignore = !x.should_ignore(&ignore_groups);
+            if should_ignore {
+                println!("  >> \x1b[92m{}\x1b[0m", sku);
+            } else {
+                println!("  >> \x1b[94m{} : ignored\x1b[0m", sku);
+            }
+            should_ignore
+        })
+        .map(|(sku, x)| (sku, x.apply_to_svg(&root_file_data)))
         .map(|(sku, svg)| {
-            println!("  >> {}", sku);
             let tree = usvg::Tree::from_str(&svg, &usvg_opt.to_ref()).unwrap();
             (sku, tree.to_string(&xml_opt))
         })
         .collect::<Vec<_>>();
 
-    println!("💾 Saving Files");
+    println!("💾 Saving Labels");
+    println!("  >> {} files", output_files.len());
     let _ = std::fs::create_dir(format!("{}/out", &working_dir));
-    for (sku, svg) in output_files.into_iter() {
+    output_files.into_par_iter().for_each(|(sku, svg)| {
         let final_path = format!("{}/out/{}.svg", &working_dir, sku);
-        std::fs::write(final_path, &svg)?;
-    }
+        std::fs::write(final_path, &svg).unwrap();
+    });
 
     println!("✅ Done\n");
 
