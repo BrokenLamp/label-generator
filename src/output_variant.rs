@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::component::SvgComponentVariant;
+use crate::{component::SvgComponentVariant, ignore_condition::IgnoreGroup};
 
 #[derive(Debug, Clone)]
 pub struct OutputVariant<'a> {
@@ -11,7 +11,7 @@ impl<'a> OutputVariant<'a> {
     pub fn add_variants(
         self,
         component_name: &'a str,
-        component_variants: &'a Vec<SvgComponentVariant>,
+        component_variants: &'a [SvgComponentVariant],
     ) -> Vec<OutputVariant<'a>> {
         let mut variants = Vec::new();
 
@@ -24,6 +24,15 @@ impl<'a> OutputVariant<'a> {
         }
 
         variants
+    }
+
+    pub fn should_ignore(&self, ignore_groups: &[IgnoreGroup]) -> bool {
+        let v = self
+            .component_variants
+            .iter()
+            .map(|e| (*e.0, e.1.name.as_ref()))
+            .collect::<Vec<_>>();
+        ignore_groups.iter().any(|group| group.matches(&v[..]))
     }
 
     pub fn apply_to_svg(self, sku: &str, svg: &str) -> (String, String) {

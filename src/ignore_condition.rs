@@ -1,8 +1,22 @@
 use std::str::FromStr;
 
+use crate::component::SvgComponentVariant;
+
 #[derive(Debug, Clone)]
 pub struct IgnoreGroup {
     pub conditions: Vec<IgnoreCondition>,
+}
+
+impl IgnoreGroup {
+    pub fn matches(&self, variants: &[(&str, &str)]) -> bool {
+        self.conditions
+            .iter()
+            .all(|condition| condition.matches(variants))
+    }
+
+    pub fn slice_contains_match(v: &[IgnoreGroup], variants: &[(&str, &str)]) -> bool {
+        v.iter().any(|group| group.matches(variants))
+    }
 }
 
 impl FromStr for IgnoreGroup {
@@ -22,6 +36,14 @@ impl FromStr for IgnoreGroup {
 pub struct IgnoreCondition {
     pub component: String,
     pub variant: String,
+}
+
+impl IgnoreCondition {
+    pub fn matches(&self, variants: &[(&str, &str)]) -> bool {
+        variants
+            .iter()
+            .any(|v| v.0 == self.component && v.1 == self.variant)
+    }
 }
 
 impl FromStr for IgnoreCondition {

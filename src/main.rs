@@ -67,7 +67,6 @@ fn main() -> Result<()> {
     }];
 
     for (component_name, component) in components.iter() {
-        println!("🔧 Component: {}", component_name);
         match component {
             SvgComponent::Exponential(component_variants) => {
                 output_variants = output_variants
@@ -103,20 +102,23 @@ fn main() -> Result<()> {
         },
     };
 
+    println!("📝 Generated Files:");
+
     let output_files = output_variants
         .into_iter()
+        .filter(|x| !x.should_ignore(&ignore_groups))
         .map(|x| x.apply_to_svg(&manifest.sku, &root_file_data))
         .map(|(sku, svg)| {
+            println!("  >> {}", sku);
             let tree = usvg::Tree::from_str(&svg, &usvg_opt.to_ref()).unwrap();
             (sku, tree.to_string(&xml_opt))
         })
         .collect::<Vec<_>>();
 
-    println!("💾 Generated Files:");
+    println!("💾 Saving Files");
     let _ = std::fs::create_dir(format!("{}/out", &working_dir));
     for (sku, svg) in output_files.into_iter() {
         let final_path = format!("{}/out/{}.svg", &working_dir, sku);
-        println!("  >> {}", sku);
         std::fs::write(final_path, &svg)?;
     }
 
