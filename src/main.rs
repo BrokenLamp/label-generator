@@ -56,7 +56,14 @@ fn main() -> Result<()> {
                 println!("  >> {}", component_name);
             }
             SvgComponent::Exponential(variants) => {
-                println!("  >> \x1b[92m{}\x1b[0m", component_name);
+                if !manifest.sku.contains(&format!("{{{}}}", component_name)) {
+                    println!(
+                        "  >> \x1b[93m\x1b[4m{}\x1b[0m 🔴 Not in SKU",
+                        component_name
+                    );
+                } else {
+                    println!("  >> \x1b[92m{}\x1b[0m", component_name);
+                }
                 for variant in variants {
                     println!("     > \x1b[94m{}\x1b[0m", variant.name);
                 }
