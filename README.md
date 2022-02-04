@@ -77,9 +77,14 @@ SVG Label Generator
   >> Root: root.svg
   >> SKU: SC-{head}-{length}
 📦 Components:
-  >> branding 📝
-  >> head 📂
-  >> length 📂
+  >> branding
+  >> head
+     > P
+     > F
+  >> length
+     > 2
+     > 3
+     > 4
 💾 Generated Files:
   >> SC-P-2
   >> SC-P-3
@@ -126,3 +131,50 @@ Eg:
 
 </svg>
 ```
+
+### Ignore a combination
+
+If there's a particular set of variants you want to ignore, you can add them to the manifest.
+
+For example, let's say we'll never have a Phillips 4" screw.
+
+```toml
+root = "root.svg"
+sku = "SC-{head}-{length}"
+
+# Ignore Phillips 4" screws
+ignore = [
+  "head:P,length:4",
+]
+```
+
+Now when we run the label generator, we won't generate any labels for this combination.
+
+```
+$ label-generator
+
+SVG Label Generator
+
+🔧 Config:
+  >> Root: root.svg
+  >> SKU: SC-{head}-{length}
+📦 Components:
+  >> branding
+  >> head
+     > P
+     > F
+  >> length
+     > 2
+     > 3
+     > 4
+💾 Generated Files:
+  >> SC-P-2
+  >> SC-P-3
+  >> SC-P-4 : ignored
+  >> SC-F-2
+  >> SC-F-3
+  >> SC-F-4
+✅ Done
+```
+
+The SKU for the label will be shown, but its svg will not be generated.
