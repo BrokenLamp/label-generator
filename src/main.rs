@@ -5,7 +5,14 @@ use manifest::Manifest;
 use regex::Regex;
 use usvg::TextRendering;
 
+use crate::{
+    component::SvgComponent, ignore_condition::IgnoreGroup, output_variant::OutputVariant,
+};
+
+mod component;
+mod ignore_condition;
 mod manifest;
+mod output_variant;
 
 fn main() -> Result<()> {
     println!(include_str!("../LICENSE"));
@@ -17,13 +24,19 @@ fn main() -> Result<()> {
     println!("🔧 Config:");
     println!("  >> Root: {}", manifest.root);
     println!("  >> SKU: {}", manifest.sku);
+    println!("  >> Ignore: {:?} conditions", manifest.ignore.len());
 
-    let root_file_data = std::fs::read_to_string(format!("{}/{}", &working_dir, &manifest.root))?;
+    let ignore_groups: Vec<IgnoreGroup> = manifest
+        .ignore
+        .iter()
+        .flat_map(|s| IgnoreGroup::from_str(s))
+        .collect::<Vec<_>>();
+    println!("{:#?}", ignore_groups);
 
-    let mut source_files: HashMap<String, String> = HashMap::new();
+    let mut root_file_data =
+        std::fs::read_to_string(format!("{}/{}", &working_dir, &manifest.root))?;
 
-    let mut output_files: Vec<(String, String)> =
-        vec![(manifest.sku.clone(), root_file_data.clone())];
+    let mut components: HashMap<String, SvgComponent> = HashMap::new();
 
     println!("📦 Components:");
 
@@ -34,70 +47,37 @@ fn main() -> Result<()> {
         let path_name = format!("{}/{}", &working_dir, component_name);
         let path = std::path::Path::new(&path_name);
 
-        if path.is_dir() {
-            println!("  >> {} 📂", component_name);
-            if !manifest.sku.contains(component_name) {
-                println!(
-                    "\x1b[93m     {} warning: '{}' not in sku\x1b[0m",
-                    "^".repeat(component_name.len()),
-                    component_name
-                );
-                println!(
-                    "\n\x1b[94m     Help: add '{{{}}}' to sku in manifest.toml\x1b[0m",
-                    component_name
-                );
-                println!("\x1b[94m     Example:\x1b[0m");
-                println!(
-                    "\x1b[94;1m     sku = \"{}-{{{}}}\"\x1b[0m",
-                    manifest.sku, component_name
-                );
-                println!();
+        let component = SvgComponent::try_from(path)?;
+        match &component {
+            SvgComponent::Single(_data) => {
+                println!("  >> {}", component_name);
             }
-            let files = std::fs::read_dir(path).unwrap();
-            let mut new_output_files = Vec::new();
-            for file in files.flatten() {
-                let mut files_to_append = Vec::new();
-                let path = file.path();
-                let path_str = path.to_str().unwrap().to_string();
-                let file_name = file.file_name().to_str().unwrap().to_string();
-                let file_data = match source_files.get(&path_str) {
-                    Some(data) => data,
-                    None => {
-                        let file_data = std::fs::read_to_string(path)?;
-                        source_files.insert(path_str.clone(), file_data);
-                        source_files.get(&path_str).unwrap()
-                    }
-                };
-                for (sku, data) in &output_files {
-                    let sku_name = file_name.split(".").collect::<Vec<_>>()[0]
-                        .split("-")
-                        .collect::<Vec<_>>()[0];
-                    let new_sku = sku.replace(&format!("{{{}}}", &component_name), &sku_name);
-                    let new_data = data.replace(
-                        &format!("<!-- component:{} -->", &component_name),
-                        &file_data,
-                    );
-                    files_to_append.push((new_sku, new_data));
+            SvgComponent::Exponential(variants) => {
+                println!("  >> \x1b[92m{}\x1b[0m", component_name);
+                for variant in variants {
+                    println!("     > \x1b[94m{}\x1b[0m", variant.name);
                 }
-                new_output_files.append(&mut files_to_append);
             }
-            output_files = new_output_files;
-        } else {
-            println!("  >> {} 📝", component_name);
-            let path_name = format!("{}/{}.svg", &working_dir, component_name);
-            let path = std::path::Path::new(&path_name);
-            let file_data = match source_files.get(path.to_str().unwrap()) {
-                Some(data) => data,
-                None => {
-                    let file_data = std::fs::read_to_string(path)?;
-                    source_files.insert(path.to_str().unwrap().to_string(), file_data);
-                    source_files.get(path.to_str().unwrap()).unwrap()
-                }
-            };
-            for data in output_files.iter_mut() {
-                data.1 = data
-                    .1
-                    .replace(&format!("<!-- component:{} -->", component_name), file_data);
+        }
+        components.insert(component_name.to_string(), component);
+    }
+
+    let mut output_variants: Vec<OutputVariant> = vec![OutputVariant {
+        component_variants: HashMap::new(),
+    }];
+
+    for (component_name, component) in components.iter() {
+        println!("🔧 Component: {}", component_name);
+        match component {
+            SvgComponent::Exponential(component_variants) => {
+                output_variants = output_variants
+                    .iter()
+                    .flat_map(|x| x.clone().add_variants(component_name, &component_variants))
+                    .collect::<Vec<_>>();
+            }
+            SvgComponent::Single(x) => {
+                root_file_data = root_file_data
+                    .replace(format!("<!-- component:{} -->", component_name).as_str(), x);
             }
         }
     }
@@ -109,7 +89,7 @@ fn main() -> Result<()> {
     fontdb.load_fonts_dir(path);
     let usvg_opt = usvg::Options {
         text_rendering: TextRendering::GeometricPrecision,
-        font_family: "Ahem".to_string(),
+        font_family: "Arial".to_string(),
         keep_named_groups: true,
         fontdb,
         ..Default::default()
@@ -123,13 +103,21 @@ fn main() -> Result<()> {
         },
     };
 
+    let output_files = output_variants
+        .into_iter()
+        .map(|x| x.apply_to_svg(&manifest.sku, &root_file_data))
+        .map(|(sku, svg)| {
+            let tree = usvg::Tree::from_str(&svg, &usvg_opt.to_ref()).unwrap();
+            (sku, tree.to_string(&xml_opt))
+        })
+        .collect::<Vec<_>>();
+
     println!("💾 Generated Files:");
     let _ = std::fs::create_dir(format!("{}/out", &working_dir));
     for (sku, svg) in output_files.into_iter() {
         let final_path = format!("{}/out/{}.svg", &working_dir, sku);
         println!("  >> {}", sku);
-        let tree = usvg::Tree::from_str(&svg, &usvg_opt.to_ref()).unwrap();
-        std::fs::write(final_path, &tree.to_string(&xml_opt))?;
+        std::fs::write(final_path, &svg)?;
     }
 
     println!("✅ Done\n");
