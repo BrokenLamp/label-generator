@@ -158,6 +158,8 @@ SVG Label Generator
 🔧 Config:
   >> Root: root.svg
   >> SKU: SC-{head}-{length}
+  >> Ignore:
+     > head:P, length:4
 📦 Components:
   >> branding
   >> head

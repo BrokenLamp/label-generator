@@ -18,28 +18,30 @@ mod output_variant;
 fn main() -> Result<()> {
     println!(include_str!("../LICENSE"));
     println!("SVG Label Generator\n");
-    println!("https://github.com/BrokenLamp/label-generator\n");
+    println!("https://github.com/BrokenLamp/label-generator");
 
     let working_dir = get_working_dir()?;
     let manifest: Manifest = get_manifest(&working_dir)?;
-    println!("🔧 Config:");
+    println!("\n🔧 Config:");
     println!("  >> Root: {}", manifest.root);
     println!("  >> SKU: {}", manifest.sku);
-    println!("  >> Ignore: {:?} conditions", manifest.ignore.len());
+    println!("  >> Ignore: {}", manifest.ignore.len());
 
     let ignore_groups: Vec<IgnoreGroup> = manifest
         .ignore
         .par_iter()
         .flat_map(|s| IgnoreGroup::from_str(s))
         .collect::<Vec<_>>();
-    println!("{:#?}", ignore_groups);
+    for group in &ignore_groups {
+        println!("     > {}", group);
+    }
 
     let mut root_file_data =
         std::fs::read_to_string(format!("{}/{}", &working_dir, &manifest.root))?;
 
     let mut components: HashMap<String, SvgComponent> = HashMap::new();
 
-    println!("📦 Components:");
+    println!("\n📦 Components:");
 
     let re = Regex::new(r"<!-- component:(.*) -->").unwrap();
     for cap in re.captures_iter(&root_file_data) {
@@ -103,7 +105,7 @@ fn main() -> Result<()> {
         },
     };
 
-    println!("📝 Generated Files:");
+    println!("\n📝 Generated Files:");
 
     let output_files = output_variants
         .into_par_iter()
@@ -124,7 +126,7 @@ fn main() -> Result<()> {
         })
         .collect::<Vec<_>>();
 
-    println!("💾 Saving Labels");
+    println!("\n💾 Saving Labels");
     println!("  >> {} files", output_files.len());
     let _ = std::fs::create_dir(format!("{}/out", &working_dir));
     output_files.into_par_iter().for_each(|(sku, svg)| {
@@ -132,7 +134,7 @@ fn main() -> Result<()> {
         std::fs::write(final_path, &svg).unwrap();
     });
 
-    println!("✅ Done\n");
+    println!("\n✅ Done\n");
 
     Ok(())
 }
