@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate lazy_static;
+
 use std::{collections::HashMap, str::FromStr};
 
 use anyhow::{anyhow, Context, Result};
@@ -14,6 +17,7 @@ mod component;
 mod ignore_condition;
 mod manifest;
 mod output_variant;
+mod script;
 
 fn main() -> Result<()> {
     println!(include_str!("../LICENSE"));
@@ -127,6 +131,17 @@ fn main() -> Result<()> {
             should_ignore
         })
         .map(|(sku, x)| (sku, x.apply_to_svg(&root_file_data)))
+        .map(|(sku, svg)| -> (String, anyhow::Result<String>) { (sku, script::run_scripts(svg)) })
+        .flat_map(|(sku, svg)| {
+            let svg = match svg {
+                Ok(s) => s,
+                Err(e) => {
+                    println!("{}", e);
+                    return None;
+                }
+            };
+            Some((sku, svg))
+        })
         .map(|(sku, svg)| {
             let tree = usvg::Tree::from_str(&svg, &usvg_opt.to_ref()).unwrap();
             (sku, tree.to_string(&xml_opt))
